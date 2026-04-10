@@ -6,7 +6,6 @@ import { BusinessCard } from '../types';
 import { toast } from 'sonner';
 
 interface ScannerProps {
-  key?: string;
   onClose: () => void;
   onScanned: (card: Omit<BusinessCard, 'id' | 'createdAt'>) => void;
 }
