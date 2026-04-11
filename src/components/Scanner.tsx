@@ -18,30 +18,30 @@ export default function Scanner({ onClose, onScanned }: ScannerProps) {
 
   const resizeImage = (file: File, maxSize: number): Promise<{ base64: string; dataUrl: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        const base64 = dataUrl.split(',')[1];
-        resolve({ base64, dataUrl, mimeType: 'image/jpeg' });
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
+      reader.onload = () => {
+        const img = document.createElement('img');
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const base64 = dataUrl.split(',')[1];
+          resolve({ base64, dataUrl, mimeType: 'image/jpeg' });
+        };
+        img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+        img.src = reader.result as string;
       };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('画像の読み込みに失敗しました'));
-      };
-      img.src = url;
+      reader.readAsDataURL(file);
     });
   };
 
