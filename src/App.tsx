@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus } from 'lucide-react';
-import { AnimatePresence } from 'motion/react';
+import { Search, Plus, ScanLine } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Toaster } from '../components/ui/sonner';
 import { toast } from 'sonner';
 import { BusinessCard } from './types';
@@ -15,6 +15,7 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<BusinessCard | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
     fetchCards()
@@ -73,18 +74,44 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-background text-foreground overflow-hidden">
-      {/* Header & Search */}
-      <div className="pt-12 pb-4 px-6 bg-background/80 backdrop-blur-xl border-b border-border z-10 shrink-0">
-        <h1 className="text-2xl font-light tracking-tight mb-6">名刺管理</h1>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-          <input
-            type="text"
-            placeholder="名前、会社名、メモで検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-secondary text-secondary-foreground rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-1 focus:ring-ring transition-all"
-          />
+      {/* Header */}
+      <div className="glass border-b border-white/[0.06] z-10 shrink-0">
+        <div className="pt-[env(safe-area-inset-top)] px-6">
+          <div className="flex items-center justify-between pt-4 pb-3">
+            <div>
+              <h1 className="text-[28px] font-bold tracking-tight">名刺</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {cards.length > 0 ? `${cards.length} 件` : ''}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsScannerOpen(true)}
+              className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--gradient-start)] to-[var(--gradient-end)] flex items-center justify-center hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+            >
+              <ScanLine size={18} className="text-white" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="pb-3">
+            <motion.div
+              animate={{
+                borderColor: isSearchFocused ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.04)',
+              }}
+              className="relative rounded-2xl border bg-white/[0.03] overflow-hidden"
+            >
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <input
+                type="text"
+                placeholder="検索..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                className="w-full bg-transparent text-sm py-2.5 pl-10 pr-4 outline-none placeholder:text-muted-foreground/60"
+              />
+            </motion.div>
+          </div>
         </div>
       </div>
 
@@ -92,12 +119,14 @@ export default function App() {
       <CardList cards={filteredCards} onSelect={setSelectedCard} isLoading={isLoading} />
 
       {/* Floating Action Button */}
-      <button
+      <motion.button
         onClick={() => setIsScannerOpen(true)}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-transform z-20"
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.92 }}
+        className="fixed bottom-8 right-6 w-14 h-14 bg-gradient-to-br from-[var(--gradient-start)] to-[var(--gradient-end)] rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/25 z-20"
       >
-        <Plus size={24} />
-      </button>
+        <Plus size={22} className="text-white" />
+      </motion.button>
 
       {/* Modals & Overlays */}
       <AnimatePresence>
@@ -117,7 +146,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <Toaster theme="dark" position="top-center" />
+      <Toaster
+        theme="dark"
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: 'rgba(15, 15, 18, 0.9)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.06)',
+          },
+        }}
+      />
     </div>
   );
 }
