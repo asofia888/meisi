@@ -16,33 +16,52 @@ export default function Scanner({ onClose, onScanned }: ScannerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const resizeImage = (file: File, maxSize: number): Promise<{ base64: string; dataUrl: string; mimeType: string }> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
-      reader.onload = () => {
-        const img = document.createElement('img');
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > maxSize || height > maxSize) {
-            const ratio = Math.min(maxSize / width, maxSize / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d')!;
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          const base64 = dataUrl.split(',')[1];
-          resolve({ base64, dataUrl, mimeType: 'image/jpeg' });
-        };
-        img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
-    });
+  const decodeImage = async (file: File): Promise<CanvasImageSource & { width: number; height: number; close?: () => void }> => {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        return await createImageBitmap(file);
+      } catch (e) {
+        console.warn('createImageBitmap failed, falling back to HTMLImageElement', e);
+      }
+    }
+    const url = URL.createObjectURL(file);
+    try {
+      const img = document.createElement('img');
+      img.src = url;
+      if (img.decode) {
+        await img.decode();
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error('画像のデコードに失敗しました'));
+        });
+      }
+      return img as unknown as CanvasImageSource & { width: number; height: number; close?: () => void };
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+  };
+
+  const resizeImage = async (file: File, maxSize: number): Promise<{ base64: string; dataUrl: string; mimeType: string }> => {
+    const source = await decodeImage(file);
+    let { width, height } = source;
+    if (!width || !height) throw new Error('画像サイズを取得できませんでした');
+    if (width > maxSize || height > maxSize) {
+      const ratio = Math.min(maxSize / width, maxSize / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context を取得できませんでした');
+    ctx.drawImage(source, 0, 0, width, height);
+    source.close?.();
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    if (!dataUrl || dataUrl === 'data:,') throw new Error('画像の書き出しに失敗しました（サイズが大きすぎる可能性）');
+    const base64 = dataUrl.split(',')[1];
+    return { base64, dataUrl, mimeType: 'image/jpeg' };
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,8 +70,10 @@ export default function Scanner({ onClose, onScanned }: ScannerProps) {
     e.target.value = '';
 
     setIsProcessing(true);
+    let stage: 'resize' | 'scan' = 'resize';
     try {
       const { base64, dataUrl, mimeType } = await resizeImage(file, 1600);
+      stage = 'scan';
       const data = await scanBusinessCard(base64, mimeType);
       onScanned({
         name: data.name || '',
@@ -65,7 +86,13 @@ export default function Scanner({ onClose, onScanned }: ScannerProps) {
       });
       toast.success('スキャンが完了しました');
     } catch (err) {
-      toast.error('名刺の読み取りに失敗しました。もう一度お試しください。');
+      console.error(`[Scanner] ${stage} failed:`, err);
+      const detail = err instanceof Error ? err.message : String(err);
+      if (stage === 'resize') {
+        toast.error(`画像の読み込みに失敗しました: ${detail}`);
+      } else {
+        toast.error(`サーバーへの送信に失敗しました: ${detail}（サーバーが起動しているか確認してください）`);
+      }
     } finally {
       setIsProcessing(false);
     }

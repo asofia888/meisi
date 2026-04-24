@@ -34,11 +34,23 @@ export async function deleteCard(id: string): Promise<void> {
 }
 
 export async function scanBusinessCard(base64Image: string, mimeType: string): Promise<Partial<BusinessCard>> {
-  const res = await fetch(`${API_BASE}/scan`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64Image, mimeType }),
-  });
-  if (!res.ok) throw new Error('Failed to scan business card');
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64Image, mimeType }),
+    });
+  } catch (e) {
+    throw new Error(`ネットワークエラー (${e instanceof Error ? e.message : String(e)})`);
+  }
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.error) detail += ` - ${body.error}`;
+    } catch {}
+    throw new Error(detail);
+  }
   return res.json();
 }
